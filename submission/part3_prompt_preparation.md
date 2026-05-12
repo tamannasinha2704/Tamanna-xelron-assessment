@@ -1,6 +1,6 @@
 # Part 3: Prompt Preparation
 
-## Selected Pull Request
+### Selected Pull Request
 
 - **Repository:** beetbox/beets  
 - **Selected PR:** #3877 — Web Readonly Mode  
@@ -9,7 +9,7 @@
 
 ---
 
-# 3.1.1 Repository Context
+## 3.1.1 Repository Context
 
 Beets is an open-source Python application used for organising and managing music libraries. It works mainly through the command line and helps users automatically correct music metadata such as artist names, album names, song titles, genres, and track numbers.
 
@@ -23,7 +23,7 @@ The main users of beets are music enthusiasts, collectors, and users who manage 
 
 ---
 
-# 3.1.2 Pull Request Description
+## 3.1.2 Pull Request Description
 
 This pull request adds a new `readonly` configuration option to the beets web plugin.
 
@@ -55,7 +55,7 @@ This change improves safety while still allowing advanced users to enable write 
 
 ---
 
-# 3.1.3 Acceptance Criteria
+## 3.1.3 Acceptance Criteria
 
 ✓ When the `readonly` setting is missing from the config file, the system should use `true` as the default value.
 
@@ -81,53 +81,53 @@ This change improves safety while still allowing advanced users to enable write 
 
 ---
 
-# 3.1.4 Edge Cases
+## 3.1.4 Edge Cases
 
-## Edge Case 1 — Missing Config Value
+### Edge Case 1 — Missing Config Value
 
 If the user does not add the `readonly` setting in the config file, the system should automatically use `true` as the default value instead of failing.
 
 ---
 
-## Edge Case 2 — Incorrect Boolean Handling
+### Edge Case 2 — Incorrect Boolean Handling
 
 The config system should correctly handle values like `yes`, `no`, `true`, and `false` and convert them into proper boolean values.
 
 ---
 
-## Edge Case 3 — Only One Route Protected
+### Edge Case 3 — Only One Route Protected
 
 The implementation should make sure that both DELETE and PATCH requests are checked separately. Protecting only one route could create inconsistent behaviour.
 
 ---
 
-## Edge Case 4 — GET Requests Accidentally Blocked
+### Edge Case 4 — GET Requests Accidentally Blocked
 
 Readonly mode should only block write operations. GET requests for viewing library data should continue working normally.
 
 ---
 
-## Edge Case 5 — Flask Config Not Updated Properly
+### Edge Case 5 — Flask Config Not Updated Properly
 
 The readonly value from the beets config should correctly update Flask's `app.config['READONLY']` before any request is processed.
 
 ---
 
-# 3.1.5 Initial Prompt
+## 3.1.5 Initial Prompt
 
 You are working on the `beetbox/beets` repository, which is a Python command-line music library manager. The repository uses a plugin-based architecture, and the `web` plugin provides a Flask-based HTTP API for accessing the music library.
 
 Implement the changes described in PR #3877 related to readonly mode for the web plugin.
 
-## Main Goal
+### Main Goal
 
 Add a new `readonly` configuration option that prevents users from modifying library data through the web API unless readonly mode is manually disabled.
 
 ---
 
-## Requirements
+### Requirements
 
-### 1. Add Readonly Configuration Support
+#### 1. Add Readonly Configuration Support
 
 Add a new config option called `readonly` inside the web plugin configuration.
 
@@ -140,7 +140,7 @@ The readonly value should be available before any requests are handled.
 
 ---
 
-### 2. Protect DELETE and PATCH Requests
+#### 2. Protect DELETE and PATCH Requests
 
 When readonly mode is enabled:
 - DELETE requests should return HTTP 405
@@ -159,7 +159,7 @@ then DELETE and PATCH requests should work normally again.
 
 ---
 
-### 3. Update Documentation
+#### 3. Update Documentation
 
 Update the web plugin documentation to include:
 - Explanation of the new `readonly` option
@@ -168,7 +168,7 @@ Update the web plugin documentation to include:
 
 ---
 
-### 4. Add Tests
+#### 4. Add Tests
 
 Add tests for:
 - DELETE blocked when readonly mode is enabled
@@ -181,7 +181,7 @@ Existing GET request tests should continue passing.
 
 ---
 
-## Edge Cases to Consider
+### Edge Cases to Consider
 
 - If the config value is missing, readonly should default to `true`
 - The config value should be handled as a boolean
@@ -191,7 +191,7 @@ Existing GET request tests should continue passing.
 
 ---
 
-## Expected Behaviour
+### Expected Behaviour
 
 - Readonly mode should prevent modification requests
 - Users should still be able to browse the music library normally
