@@ -1,141 +1,198 @@
-# Part 3: Prompt Preparation Document
+# Part 3: Prompt Preparation
 
-**Selected PR:** #3877 — Web Readonly Mode  
-**Repository:** beetbox/beets  
-**PR Link:** https://github.com/beetbox/beets/pull/3877
+## Selected Pull Request
 
----
-
-## 3.1.1 Repository Context
-
-> ⚠️ **Note to evaluator:** This section must be written in your own words. Below is a structured guide of what to include — rewrite it in your own voice before submitting.
-
-**Draft to rewrite in your own words:**
-
-Beets is a command-line tool written in Python that helps people manage their music libraries. The main problem it solves is that music files often have incorrect or incomplete metadata — things like wrong album names, missing artist tags, or inconsistent track numbering. Beets connects to MusicBrainz, a community-run music database, and automatically identifies and corrects these tags.
-
-At its core, beets keeps a local SQLite database of all your music, and you interact with it through terminal commands like `beet import`, `beet list`, or `beet modify`. One of beets' strongest design choices is its plugin system — almost all extended features are packaged as separate plugins that users can enable in a config file. This includes things like fetching lyrics, downloading album art, or — as is relevant to this PR — running a local web server to browse your library.
-
-The `web` plugin specifically starts a small Flask-based HTTP server that exposes the music library as a REST API. Users can query for tracks, albums, and play audio files through a browser or any HTTP client. This makes beets accessible to remote tools and scripts that want to read or modify library data programmatically.
-
-The intended users of beets are technically comfortable music enthusiasts — people who are comfortable with the terminal, care deeply about tag accuracy, and want fine-grained control over their library. The web plugin extends this to any use case where someone wants to access their library over a network.
+- **Repository:** beetbox/beets  
+- **Selected PR:** #3877 — Web Readonly Mode  
+- **Repository Link:** https://github.com/beetbox/beets  
+- **PR Link:** https://github.com/beetbox/beets/pull/3877
 
 ---
 
-## 3.1.2 Pull Request Description
+# 3.1.1 Repository Context
 
-> ⚠️ **Note to evaluator:** This section must be written in your own words. Below is a structured guide — rewrite it in your own voice before submitting.
+Beets is an open-source Python application used for organising and managing music libraries. It works mainly through the command line and helps users automatically correct music metadata such as artist names, album names, song titles, genres, and track numbers.
 
-**Draft to rewrite in your own words:**
+The repository mainly focuses on solving problems related to music library organisation and metadata management. Many music collections contain incorrect or inconsistent tags, and manually fixing them can take a long time. Beets solves this by connecting with online databases like MusicBrainz to identify songs and fetch accurate metadata automatically.
 
-This PR adds a `readonly` configuration option to the beets `web` plugin. Before this change existed, the web plugin's HTTP API exposed DELETE and PATCH endpoints that could modify or remove items from the music library. Any client that could reach the running beets web server — including scripts, browser extensions, or other users on the same network — could delete tracks or change metadata without any restrictions.
+Another important feature of beets is its plugin system. Users can enable plugins to add extra functionality like lyrics support, album art downloads, duplicate detection, replay gain calculation, and web access. The repository is designed in a modular way, so plugins can add new features without changing the main application heavily.
 
-The problem that triggered this PR (referenced as issue #3870) was that users who ran the web plugin on shared machines or over a local network had no way to protect their library from accidental or unauthorised modifications. The web interface was fine for browsing, but exposing write operations felt risky without an explicit opt-in.
+The `web` plugin is relevant for this pull request because it creates a Flask-based web server that exposes the music library through an HTTP API. Users can browse their library, access music information, and interact with the library from browsers or scripts.
 
-The change introduced here is straightforward: a new config option called `readonly` is added to the `web:` section of the beets config. It defaults to `true`, meaning write operations are now blocked by default. If a user wants to re-enable DELETE and PATCH, they set `readonly: no` in their config.
-
-Previous behaviour: DELETE and PATCH were available to anyone who could reach the server.  
-New behaviour: DELETE and PATCH return HTTP 405 (Method Not Allowed) unless `readonly: no` is explicitly set.
-
-This is noted as a potentially breaking change for users who were relying on DELETE or PATCH, but the migration is a simple one-line config addition.
+The main users of beets are music enthusiasts, collectors, and users who manage large music libraries and want better automation and organisation.
 
 ---
 
-## 3.1.3 Acceptance Criteria
+# 3.1.2 Pull Request Description
 
-The following criteria define what a correct implementation of this PR looks like:
+This pull request adds a new `readonly` configuration option to the beets web plugin.
 
-✓ When `readonly` is not set in config (default), the web plugin should block DELETE requests and return HTTP 405.
+Before this change, the web plugin allowed users to send DELETE and PATCH requests through the HTTP API. These requests could modify or delete music library data directly. Any user or device with access to the running web server could potentially make changes to the library.
 
-✓ When `readonly` is not set in config (default), the web plugin should block PATCH requests and return HTTP 405.
+This behaviour created a security and safety concern, especially for users running the web plugin on shared systems or local networks. Some users only wanted read-only access for browsing their music collection and did not want editing features enabled by default.
 
-✓ When `readonly: true` is explicitly set in config, DELETE and PATCH should both be blocked with HTTP 405.
+To solve this issue, the PR introduces a `readonly` setting inside the web plugin configuration. The setting is enabled by default.
 
-✓ When `readonly: false` is explicitly set in config, DELETE requests should succeed and return the appropriate HTTP response (200 or 404).
+When readonly mode is active:
+- DELETE requests are blocked
+- PATCH requests are blocked
+- The server returns HTTP 405 (Method Not Allowed)
 
-✓ When `readonly: false` is explicitly set in config, PATCH requests should succeed and apply the changes to the library item.
+If users want editing support, they can manually disable readonly mode in the config file:
 
-✓ GET requests should always succeed regardless of the `readonly` setting — reading the library is never restricted.
+```yaml
+web:
+  readonly: false
+```
 
-✓ The `readonly` configuration option should be documented in `docs/plugins/web.rst` with its default value and an example of disabling it.
+Previous behaviour:
+- DELETE and PATCH requests worked normally
 
-✓ The Flask `app.config['READONLY']` value should be correctly synchronised from the beets config `self.config['readonly']` when the plugin initialises.
+New behaviour:
+- DELETE and PATCH requests are blocked unless readonly mode is disabled manually
 
-✓ Existing tests for GET operations should continue to pass without modification.
-
-✓ The changelog should include a note about this being a potentially breaking change for users who were previously using DELETE or PATCH without configuration.
-
----
-
-## 3.1.4 Edge Cases
-
-**Edge Case 1: Config value is not a boolean**  
-If a user writes `readonly: yes` or `readonly: 1` instead of `readonly: true`, beets' config system should coerce these to a Python boolean correctly. The implementation should use beets' `.get(bool)` config accessor rather than raw string comparison to ensure all truthy/falsy YAML representations are handled.
-
-**Edge Case 2: Flask app.config not synced from beets config**  
-The web plugin uses two separate config systems: beets' own `confuse`-based config (`self.config['readonly']`) and Flask's `app.config`. If the code reads from one but not the other, or sets `app.config['READONLY']` before the beets config is fully loaded, the readonly state may be wrong. The sync must happen at plugin setup time — specifically in the `commands()` or `app.before_first_request` hook — not lazily.
-
-**Edge Case 3: Plugin loaded but no `web:` section in config**  
-If a user runs the web plugin without ever having a `web:` config section, the `readonly` option should fall back to its default of `true` gracefully. This means calling `.get(bool, default=True)` rather than a bare `.get()` that would raise a `NotFoundError`.
-
-**Edge Case 4: Partial config — only one of DELETE/PATCH is tested**  
-Both DELETE and PATCH must independently check the readonly flag. A naive implementation might only guard one endpoint. Tests must verify both verbs separately, not assume that fixing one fixes the other.
+This change improves safety while still allowing advanced users to enable write operations if needed.
 
 ---
 
-## 3.1.5 Initial Prompt
+# 3.1.3 Acceptance Criteria
+
+✓ When the `readonly` setting is missing from the config file, the system should use `true` as the default value.
+
+✓ When readonly mode is enabled, DELETE requests should return HTTP 405.
+
+✓ When readonly mode is enabled, PATCH requests should return HTTP 405.
+
+✓ When readonly mode is disabled using `readonly: false`, DELETE requests should work normally.
+
+✓ When readonly mode is disabled using `readonly: false`, PATCH requests should successfully update library items.
+
+✓ GET requests should continue working regardless of readonly mode.
+
+✓ The `readonly` option should be added to the plugin documentation with an example configuration.
+
+✓ The implementation should correctly update Flask's `app.config['READONLY']` value from the beets configuration.
+
+✓ Tests should be added for both readonly enabled and disabled behaviour.
+
+✓ Existing GET request tests should continue passing after implementation.
+
+✓ The changelog should include a note explaining the new readonly behaviour.
 
 ---
 
-**System/Context:**  
-You are implementing a feature for the `beetbox/beets` repository — a Python-based command-line music library manager. The codebase uses a plugin architecture where each plugin is a standalone Python file in the `beetsplug/` directory. The web plugin (`beetsplug/web.py`) runs a local Flask-based HTTP REST API that exposes the music library. Beets uses a custom configuration library called `confuse` (accessed via `self.config`) for reading user settings from `config.yaml`.
+# 3.1.4 Edge Cases
+
+## Edge Case 1 — Missing Config Value
+
+If the user does not add the `readonly` setting in the config file, the system should automatically use `true` as the default value instead of failing.
 
 ---
 
-**Task:**  
-Implement the changes described in GitHub Pull Request #3877 for the `beetbox/beets` repository.
+## Edge Case 2 — Incorrect Boolean Handling
 
-The PR adds a `readonly` configuration option to the `web` plugin. Here is exactly what needs to be implemented:
+The config system should correctly handle values like `yes`, `no`, `true`, and `false` and convert them into proper boolean values.
 
-**1. Add `readonly` config option to `beetsplug/web.py`:**
-- In the `WebPlugin` class, read `self.config['readonly'].get(bool)` — the default must be `True`
-- Assign this value to Flask's `app.config['READONLY']` so route handlers can access it
-- This assignment must happen when the Flask app is being configured, before any requests are served
+---
 
-**2. Guard DELETE and PATCH route handlers:**
-- At the top of the DELETE item handler, check `if app.config['READONLY']: return flask.make_response(jsonify(error='...'), 405)`
-- At the top of the PATCH item handler, add the same guard
-- GET operations must never be blocked
+## Edge Case 3 — Only One Route Protected
 
-**3. Update `docs/plugins/web.rst`:**
-- Add a documentation entry for the new `readonly` config option
-- Specify that the default is `true`
-- Show an example of setting `readonly: false`
+The implementation should make sure that both DELETE and PATCH requests are checked separately. Protecting only one route could create inconsistent behaviour.
 
-**4. Add tests to `test/test_web.py`:**
-- Write a test that verifies DELETE returns 405 when readonly is true (default)
-- Write a test that verifies PATCH returns 405 when readonly is true (default)
-- Write a test that verifies DELETE succeeds (200 or 404) when `readonly: false`
-- Write a test that verifies PATCH succeeds when `readonly: false`
-- Ensure all existing GET tests still pass
+---
 
-**Edge cases to handle:**
-- The `readonly` config value must be parsed as a boolean, not a string — use `.get(bool)` not `.get()`
-- If `readonly` is not present in config at all, it must default to `True` (safe default)
-- Both DELETE and PATCH must be independently guarded — do not assume fixing one covers the other
-- `app.config['READONLY']` must be set from `self.config['readonly']` before any request is processed — do not lazy-read the beets config inside each route handler
+## Edge Case 4 — GET Requests Accidentally Blocked
 
-**Do not:**
-- Modify any GET endpoints
-- Change the URL routing structure
-- Alter how the library is queried — only the write-operation guard logic needs to change
+Readonly mode should only block write operations. GET requests for viewing library data should continue working normally.
 
-**Testing requirement:**  
-After implementation, the following test scenarios must all pass:
-- `GET /item/1` works regardless of readonly setting
-- `DELETE /item/1` → 405 when `readonly: true`
-- `DELETE /item/1` → 200/404 when `readonly: false`
-- `PATCH /item/1` → 405 when `readonly: true`
-- `PATCH /item/1` → 200 when `readonly: false` with valid JSON body
+---
 
-Reference the existing test setup in `test/test_web.py` to understand how the Flask test client is configured and how beets config is set during tests. Follow the same patterns for your new test cases.
+## Edge Case 5 — Flask Config Not Updated Properly
+
+The readonly value from the beets config should correctly update Flask's `app.config['READONLY']` before any request is processed.
+
+---
+
+# 3.1.5 Initial Prompt
+
+You are working on the `beetbox/beets` repository, which is a Python command-line music library manager. The repository uses a plugin-based architecture, and the `web` plugin provides a Flask-based HTTP API for accessing the music library.
+
+Implement the changes described in PR #3877 related to readonly mode for the web plugin.
+
+## Main Goal
+
+Add a new `readonly` configuration option that prevents users from modifying library data through the web API unless readonly mode is manually disabled.
+
+---
+
+## Requirements
+
+### 1. Add Readonly Configuration Support
+
+Add a new config option called `readonly` inside the web plugin configuration.
+
+Requirements:
+- The default value should be `true`
+- Read the value using the beets config system
+- Store the value inside Flask's `app.config['READONLY']`
+
+The readonly value should be available before any requests are handled.
+
+---
+
+### 2. Protect DELETE and PATCH Requests
+
+When readonly mode is enabled:
+- DELETE requests should return HTTP 405
+- PATCH requests should return HTTP 405
+
+GET requests should continue working normally.
+
+If users disable readonly mode using:
+
+```yaml
+web:
+  readonly: false
+```
+
+then DELETE and PATCH requests should work normally again.
+
+---
+
+### 3. Update Documentation
+
+Update the web plugin documentation to include:
+- Explanation of the new `readonly` option
+- Default value information
+- Example configuration using `readonly: false`
+
+---
+
+### 4. Add Tests
+
+Add tests for:
+- DELETE blocked when readonly mode is enabled
+- PATCH blocked when readonly mode is enabled
+- DELETE allowed when readonly mode is disabled
+- PATCH allowed when readonly mode is disabled
+- GET requests still working normally
+
+Existing GET request tests should continue passing.
+
+---
+
+## Edge Cases to Consider
+
+- If the config value is missing, readonly should default to `true`
+- The config value should be handled as a boolean
+- DELETE and PATCH routes must both be protected
+- GET requests must not be blocked
+- Flask config should be updated before requests are processed
+
+---
+
+## Expected Behaviour
+
+- Readonly mode should prevent modification requests
+- Users should still be able to browse the music library normally
+- Existing functionality outside the web plugin should remain unchanged
